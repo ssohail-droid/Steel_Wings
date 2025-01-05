@@ -1,0 +1,70 @@
+
+import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.eventloop.opmode.OpMode;
+import com.qualcomm.robotcore.hardware.DcMotor;
+
+@TeleOp(name="Dual Motor Encoder Control", group="TeleOp")
+public class DualMotorEncoderControl extends OpMode {
+
+    private DcMotor motor1; // Declare the first motor
+    private DcMotor motor2; // Declare the second motor
+    private boolean directionClockwise = true; // Track motor direction
+    private static final int TICKS_TO_MOVE = 100; // Number of encoder ticks to move
+
+    @Override
+    public void init() {
+        // Initialize the motors (name them in your hardware configuration)
+        motor1 = hardwareMap.get(DcMotor.class, "motor1");
+        motor2 = hardwareMap.get(DcMotor.class, "motor2");
+
+        // Set the motors to use encoders
+        motor1.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        motor2.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        motor1.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        motor2.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+    }
+
+    @Override
+    public void loop() {
+        // Check if the "B" button is pressed to change the direction
+        if (gamepad1.b) {
+            directionClockwise = !directionClockwise; // Toggle direction
+            // Wait for "B" button release to prevent rapid toggling
+            while (gamepad1.b) {
+                idle();
+            }
+        }
+
+        // Check if the right trigger is pressed to move the motors
+        if (gamepad1.right_trigger > 0.1) {
+            int targetPosition = directionClockwise ? TICKS_TO_MOVE : -TICKS_TO_MOVE;
+
+            // Set the target position for both motors
+            motor1.setTargetPosition(motor1.getCurrentPosition() + targetPosition);
+            motor2.setTargetPosition(motor2.getCurrentPosition() + targetPosition);
+
+            // Set both motors to 100% power
+            motor1.setPower(1.0);
+            motor2.setPower(1.0);
+
+            // Wait until motors reach their target
+            while (motor1.isBusy() && motor2.isBusy()) {
+                // Keep the motors running until they reach the target
+                telemetry.addData("Motor1 Position", motor1.getCurrentPosition());
+                telemetry.addData("Motor2 Position", motor2.getCurrentPosition());
+                telemetry.update();
+            }
+
+            // Stop the motors once they reach the target
+            motor1.setPower(0);
+            motor2.setPower(0);
+
+            // Reset motor mode to keep using encoders
+            motor1.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            motor2.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        }
+
+        telemetry.addData("Motor Direction", directionClockwise ? "Clockwise" : "Counterclockwise");
+        telemetry.update();
+    }
+}
