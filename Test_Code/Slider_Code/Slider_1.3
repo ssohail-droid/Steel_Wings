@@ -1,0 +1,38 @@
+// Class declaration and imports remain unchanged
+@TeleOp(name = "jan11", group = "Iterative OpMode")
+public class dec7 extends OpMode {
+
+    // Declare OpMode members
+    private Servo intakeServo1 = null;
+    private Servo intakeServo2 = null;
+
+    @Override
+    public void init() {
+        // Initialize intake servos
+        intakeServo1 = hardwareMap.get(Servo.class, "left_Slide");
+        intakeServo2 = hardwareMap.get(Servo.class, "right_Slide");
+    }
+
+    @Override
+    public void loop() {
+        // Call the intake servo control method
+        controlIntakeServos();
+
+        // The rest of your robot control logic...
+        telemetry.update();
+    }
+
+    // Method to control intake servos
+    private void controlIntakeServos() {
+        // Open intake when right trigger is pressed
+        if (gamepad2.right_trigger > 0.5 || gamepad1.right_trigger > 0.5) {
+            intakeServo1.setPosition(1);  // Open intake
+            intakeServo2.setPosition(0);  // Open intake
+        }
+        // Close intake when left trigger is pressed
+        else if (gamepad2.left_trigger > 0.5 || gamepad1.left_trigger > 0.5) {
+            intakeServo1.setPosition(0);  // Close intake
+            intakeServo2.setPosition(1);  // Close intake
+        }
+    }
+}
