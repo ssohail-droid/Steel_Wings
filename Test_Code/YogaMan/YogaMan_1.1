@@ -1,0 +1,59 @@
+package org.firstinspires.ftc.teamcode;
+
+import static java.lang.Thread.sleep;
+import com.qualcomm.robotcore.eventloop.opmode.OpMode;
+import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.util.ElapsedTime;
+
+@com.qualcomm.robotcore.eventloop.opmode.TeleOp(name="Yoga_Man", group="Iterative OpMode")
+public class Yoga_Man extends OpMode {
+    // Declare OpMode members.
+    private ElapsedTime runtime = new ElapsedTime();
+    private DcMotor linearMotor = null;
+
+    @Override
+    public void init() {
+        linearMotor = hardwareMap.get(DcMotor.class, "arm");
+        linearMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        linearMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        // Display initialization status
+        telemetry.addData("Status", "Initialized");
+    }
+
+    @Override
+    public void start() {
+        runtime.reset();
+    }
+
+    @Override
+    public void loop() {
+        if (gamepad2.dpad_up) {
+            linearMotor.setTargetPosition(linearMotor.getCurrentPosition() + 100);
+            linearMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            linearMotor.setPower(1.0);
+        } else if (gamepad2.dpad_down) {
+            linearMotor.setTargetPosition(linearMotor.getCurrentPosition() - 100);
+            linearMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            linearMotor.setPower(1.0);
+        }
+
+        // Telemetry for the linear motor's current position and target position
+        telemetry.addData("Linear Motor Position", linearMotor.getCurrentPosition());
+        telemetry.addData("Linear Motor Target", linearMotor.getTargetPosition());
+        telemetry.addData("Status", "Run Time: " + runtime.toString());
+        telemetry.update();
+    }
+
+    private void debounceDelay() {
+        try {
+            sleep(300); // Debounce delay
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public void stop() {
+        // Stop all motors when the game is stopped
+    }
+}
