@@ -1,0 +1,266 @@
+package org.firstinspires.ftc.robotcontroller;
+
+import static java.lang.Thread.sleep;
+
+import com.qualcomm.robotcore.eventloop.opmode.OpMode;
+import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.util.ElapsedTime;
+
+@com.qualcomm.robotcore.eventloop.opmode.TeleOp(name="CNC Bot with Position Hold and CW/CCW", group="Iterative OpMode")
+public class CNCBotWithPositionHold extends OpMode {
+    // Declare OpMode members.
+    private ElapsedTime runtime = new ElapsedTime();
+
+    // Drive motors
+    private DcMotor frontLeft = null;
+    private DcMotor backLeft = null;
+    private DcMotor frontRight = null;
+    private DcMotor backRight = null;
+    // Variables for control
+    private boolean isSlowMode = false;
+
+    // Slider motor
+    private DcMotor sliderMotor;
+
+    // Servo motors
+    private Servo left_YogaMan_Servo;
+    private Servo right_YogaMan_Servo;
+    private Servo gripperServo = null;
+    private boolean lastXButtonState = false;
+    private DcMotor linearMotor = null;
+
+    // linear Slider Servo
+    private Servo left_linearSlider_Servo;
+    private Servo right_linearSlider_Servo;
+
+
+    //////////////////////sliders vals//////////////////////////////////////
+
+
+    // Slider movement limits in encoder ticks
+    private static final int SLIDER_MIN_TICKS = 0;     // Minimum position
+    private static final int SLIDER_MAX_TICKS = 2250;  // Maximum position
+    private static final double SLIDER_POWER = 1;    // Slider movement power
+    // PID control parameters (Proportional control only for simplicity)
+    private static final double Kp = 0.01;  // Proportional gain
+    private static final double HOLD_POWER = 0.05; // Small power for maintaining position
+    private int targetPosition = 0;
+    // Direction constants
+    private static final int CW = 1;   // Clockwise direction
+    private static final int CCW = -1; // Counterclockwise direction
+
+    //////////////////////sliders vals END//////////////////////////////////////
+
+    //////////////////////Yoga man vals//////////////////////////////////////
+
+    // Servo positions
+    private static final double SERVO_MIN_POSITION = 0.0;  // Fully counterclockwise
+    private static final double SERVO_MAX_POSITION = 1.0;  // Fully clockwise
+    private static final double SERVO_STEP = 0.009;         // Incremental step for position change
+    private double currentServoPosition = 1.0;             // Initial position (midpoint)
+
+    //////////////////////Yoga man vals END//////////////////////////////////////
+
+    //////////////////////linear Slider vals//////////////////////////////////////
+
+    // Servo positions
+    private boolean toggleState = false; // false = CCW, true = CW
+    private boolean wasBPressed = false;
+    private static final double linearSERVO_MIN_POSITION = 1.0;  // Fully counterclockwise
+    private static final double linearSERVO_MAX_POSITION = 0.8;  // Fully clockwise
+    private static final double linearSERVO_STEP = 1.0;         // Incremental step for position change
+    private double linearCurrentServoPosition = 0.0;
+
+    //////////////////////linear Slider vals END//////////////////////////////////////
+
+    @Override
+    public void init() {
+        // Initialize drive motors
+        frontLeft = hardwareMap.get(DcMotor.class, "front_Left");
+        backLeft = hardwareMap.get(DcMotor.class, "back_Left");
+        frontRight = hardwareMap.get(DcMotor.class, "front_Right");
+        backRight = hardwareMap.get(DcMotor.class, "back_Right");
+        // Reverse motors on one side to correct for wiring
+        frontRight.setDirection(DcMotorSimple.Direction.REVERSE);
+        backRight.setDirection(DcMotorSimple.Direction.REVERSE);
+
+        // Initialize the slider motor
+        sliderMotor = hardwareMap.get(DcMotor.class, "linear_Slider");
+        sliderMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        sliderMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        sliderMotor.setDirection(DcMotorSimple.Direction.REVERSE);
+
+        linearMotor = hardwareMap.get(DcMotor.class, "arm");
+        linearMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        linearMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+
+        gripperServo = hardwareMap.get(Servo.class, "claw");
+
+        // Initialize linear Slider Servo
+        left_linearSlider_Servo = hardwareMap.get(Servo.class, "left_linearSlider_Servo");
+        right_linearSlider_Servo = hardwareMap.get(Servo.class, "right_linearSlider_Servo");
+        // Set servos to initial position
+        left_linearSlider_Servo.setPosition(linearCurrentServoPosition);
+        right_linearSlider_Servo.setPosition(1.0 - linearCurrentServoPosition);
+
+
+
+
+        // Display initialization status
+        telemetry.addData("Status", "Initialized");
+    }
+
+    @Override
+    public void start() {
+        runtime.reset();
+        //right_linearSlider_Servo.setPosition(0);
+        //left_linearSlider_Servo.setPosition(1);
+    }
+
+    @Override
+    public void loop() {
+
+        // Check for slow mode toggle
+        if (gamepad1.y && !isSlowMode) {
+            isSlowMode = true; // Enable slow mode
+            debounceDelay();
+        } else if (gamepad1.y && isSlowMode) {
+            isSlowMode = false; // Disable slow mode
+            debounceDelay();
+        }
+        // Drive control using gamepad
+        double y = -gamepad1.left_stick_y;  // Forward/backward
+        double x = gamepad1.left_stick_x;   // Left/right
+        double turn = gamepad1.right_stick_x; // Turning
+
+
+        double denominator = Math.max(Math.abs(y) + Math.abs(x) + Math.abs(turn), 0.2);
+        double speedFactor = isSlowMode ? 0.60 : 0.85; // Adjust speed based on mode
+        double turnSpeedFactor = isSlowMode ? 0.6 : 8; // Slow down turning in slow mode (adjust as necessary)
+
+
+        // Calculate power for each wheel
+        double frontLeftPower = ((y + x + turn) / denominator) * speedFactor;
+        double backLeftPower = ((y - x + turn) / denominator) * speedFactor;
+        double frontRightPower = ((y - x - turn) / denominator) * speedFactor;
+        double backRightPower = ((y + x - turn) / denominator) * speedFactor;
+        frontLeftPower *= turnSpeedFactor;
+        backLeftPower *= turnSpeedFactor;
+        frontRightPower *= turnSpeedFactor;
+        backRightPower *= turnSpeedFactor;
+
+
+        // Set power for each motor
+        frontLeft.setPower(frontLeftPower);
+        backLeft.setPower(backLeftPower);
+        frontRight.setPower(frontRightPower);
+        backRight.setPower(backRightPower);
+
+
+
+        // Control the slider motor for holding position
+        if (gamepad2.dpad_up) {
+            // Move up if below the maximum limit
+            targetPosition = Math.min(sliderMotor.getCurrentPosition() + 100, SLIDER_MAX_TICKS);
+        } else if (gamepad2.dpad_down) {
+            // Move down if above the minimum limit
+            targetPosition = Math.max(sliderMotor.getCurrentPosition() -100, SLIDER_MIN_TICKS);
+        }
+
+
+        // P-Control: Calculate error between current and target position
+        int currentPosition = sliderMotor.getCurrentPosition();
+        int positionError = targetPosition - currentPosition;
+        // Apply P-control to resist external movement and hold position
+        double power = Kp * positionError;  // Proportional control
+        power = Math.max(Math.min(power, 1.0), -1.0);  // Limit power between -1 and 1
+        // Apply calculated power to the motor
+        sliderMotor.setPower(power);
+
+        // Start left_YogaMan_Servo= null & Servo right_YogaMan_Servo
+
+        // Servo control in servo mode
+
+        if (gamepad2.y) {
+            linearMotor.setTargetPosition(linearMotor.getCurrentPosition() + 100);
+            linearMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            linearMotor.setPower(1.0);
+        } else if (gamepad2.a) {
+            linearMotor.setTargetPosition(linearMotor.getCurrentPosition() - 100);
+            linearMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            linearMotor.setPower(1.0);
+        }
+
+        // End left_YogaMan_Servo= null & Servo right_YogaMan_Servo
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        // Toggle logic for B button
+        if (gamepad2.b && !wasBPressed) {
+            toggleState = !toggleState; // Toggle the state
+            wasBPressed = true; // Mark the button as pressed
+        } else if (!gamepad2.b) {
+            wasBPressed = false; // Reset the button press state
+        }
+
+        // Servo position control based on toggle state
+        if (toggleState) {
+            // Move servos clockwise (CW)
+            linearCurrentServoPosition = Math.min(linearCurrentServoPosition + linearSERVO_STEP, linearSERVO_MAX_POSITION);
+        } else {
+            // Move servos counterclockwise (CCW)
+            linearCurrentServoPosition = Math.max(linearCurrentServoPosition - linearSERVO_STEP, linearSERVO_MIN_POSITION);
+        }
+
+        // Set the positions for the servos
+        right_linearSlider_Servo.setPosition(linearCurrentServoPosition);
+        left_linearSlider_Servo.setPosition(1.0 - linearCurrentServoPosition);
+
+        if (gamepad2.x && !lastXButtonState) {
+
+            gripperServo.setPosition(0);
+        }
+        else{
+
+            gripperServo.setPosition(0.15);
+        }
+
+        ////////////////////////////////////////////////////////////////
+
+
+
+        // Display telemetry data
+        telemetry.addData("Status", "Run Time: " + runtime.toString());
+        telemetry.addData("Slider Position", currentPosition);
+        telemetry.addData("Target Position", targetPosition);
+        telemetry.addData("Position Error", positionError);
+        telemetry.addData("Motor Power", power);
+        telemetry.addData("Left Motors", "front (%.2f), back (%.2f)", frontLeftPower, backLeftPower);
+        telemetry.addData("Right Motors", "front (%.2f), back (%.2f)", frontRightPower, backRightPower);
+        telemetry.addData("YogaMan Servo Position", currentServoPosition);
+        telemetry.addData("YogaMan Servo Position", 1.0 - currentServoPosition);
+        telemetry.addData("linear Slider Servo Position", linearCurrentServoPosition);
+        telemetry.addData("linear Slider Servo Position", 1.0 - linearCurrentServoPosition);
+        telemetry.addData("Slow Mode", isSlowMode ? "ON" : "OFF");
+        telemetry.update();
+    }
+
+    private void debounceDelay() {
+        try {
+            sleep(300); // Debounce delay
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public void stop() {
+        // Stop all motors when the game is stopped
+        frontLeft.setPower(0);
+        backLeft.setPower(0);
+        frontRight.setPower(0);
+        backRight.setPower(0);
+        sliderMotor.setPower(0);
+    }
+}
