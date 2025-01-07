@@ -1,0 +1,111 @@
+package org.firstinspires.ftc.robotcontroller;
+
+import static java.lang.Thread.sleep;
+import com.qualcomm.robotcore.eventloop.opmode.OpMode;
+import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.util.ElapsedTime;
+
+@com.qualcomm.robotcore.eventloop.opmode.TeleOp(name="Slow Mode", group="Iterative OpMode")
+public class slowMode extends OpMode {
+    // Declare OpMode members.
+    private ElapsedTime runtime = new ElapsedTime();
+
+    // Drive motors
+    private DcMotor frontLeft = null;
+    private DcMotor backLeft = null;
+    private DcMotor frontRight = null;
+    private DcMotor backRight = null;
+    // Variables for control
+    private boolean isSlowMode = false;
+
+
+
+    @Override
+    public void init() {
+        // Initialize drive motors
+        frontLeft = hardwareMap.get(DcMotor.class, "front_Left");
+        backLeft = hardwareMap.get(DcMotor.class, "back_Left");
+        frontRight = hardwareMap.get(DcMotor.class, "front_Right");
+        backRight = hardwareMap.get(DcMotor.class, "back_Right");
+        // Reverse motors on one side to correct for wiring
+        frontRight.setDirection(DcMotorSimple.Direction.REVERSE);
+        backRight.setDirection(DcMotorSimple.Direction.REVERSE);
+
+        // Display initialization status
+        telemetry.addData("Status", "Initialized");
+    }
+
+    @Override
+    public void start() {
+        runtime.reset();
+
+    }
+
+    @Override
+    public void loop() {
+
+        // Check for slow mode toggle
+        if (gamepad1.y && !isSlowMode) {// slow mode is set to Y gamepad1
+            isSlowMode = true; // Enable slow mode
+            debounceDelay();
+        } else if (gamepad1.y && isSlowMode) {// slow mode is set to Y gamepad1
+            isSlowMode = false; // Disable slow mode
+            debounceDelay();
+        }
+        // Drive control using gamepad
+        double y = -gamepad1.left_stick_y;  // Forward/backward
+        double x = gamepad1.left_stick_x;   // Left/right
+        double turn = gamepad1.right_stick_x; // Turning
+
+
+        double denominator = Math.max(Math.abs(y) + Math.abs(x) + Math.abs(turn), 0.2);
+        double speedFactor = isSlowMode ? 0.60 : 0.85; // Adjust speed based on mode
+        double turnSpeedFactor = isSlowMode ? 0.6 : 8; // Slow down turning in slow mode (adjust as necessary)
+
+
+        // Calculate power for each wheel
+        double frontLeftPower = ((y + x + turn) / denominator) * speedFactor;
+        double backLeftPower = ((y - x + turn) / denominator) * speedFactor;
+        double frontRightPower = ((y - x - turn) / denominator) * speedFactor;
+        double backRightPower = ((y + x - turn) / denominator) * speedFactor;
+        frontLeftPower *= turnSpeedFactor;
+        backLeftPower *= turnSpeedFactor;
+        frontRightPower *= turnSpeedFactor;
+        backRightPower *= turnSpeedFactor;
+
+
+        // Set power for each motor
+        frontLeft.setPower(frontLeftPower);
+        backLeft.setPower(backLeftPower);
+        frontRight.setPower(frontRightPower);
+        backRight.setPower(backRightPower);
+
+
+
+       // Display telemetry data
+        telemetry.addData("Status", "Run Time: " + runtime.toString());
+        telemetry.addData("Left Motors", "front (%.2f), back (%.2f)", frontLeftPower, backLeftPower);
+        telemetry.addData("Right Motors", "front (%.2f), back (%.2f)", frontRightPower, backRightPower);
+        telemetry.addData("Slow Mode", isSlowMode ? "ON" : "OFF");
+        telemetry.update();
+    }
+
+    private void debounceDelay() {
+        try {
+            sleep(300); // Debounce delay
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public void stop() {
+        // Stop all motors when the game is stopped
+        frontLeft.setPower(0);
+        backLeft.setPower(0);
+        frontRight.setPower(0);
+        backRight.setPower(0);
+
+    }
+}
