@@ -1,0 +1,350 @@
+package org.firstinspires.ftc.robotcontroller;
+
+import static java.lang.Thread.sleep;
+
+import com.qualcomm.robotcore.eventloop.opmode.OpMode;
+import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DigitalChannel;
+import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.util.ElapsedTime;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+
+@TeleOp(name = "jan11", group = "Iterative OpMode")
+public class teleop  extends OpMode {
+
+// @Kezz14 for the OG code
+
+
+    // Declare OpMode members
+
+    private ElapsedTime runtime = new ElapsedTime();
+
+    private boolean isServoOpen = false;
+    private boolean isWristUsed = false;
+    private DcMotor frontLeft = null;
+    private DcMotor backLeft = null;
+    private DcMotor frontRight = null;
+    private DcMotor backRight = null;
+
+    // Declare motors and servos
+    private boolean lastAButtonState = false;
+    private DcMotor linearMotor = null;
+
+    private Servo intakeServo1 = null;
+    private Servo intakeServo2 = null;
+    private Servo wristServo = null;
+    private Servo continuousServo1 = null;
+    private Servo continuousServo2 = null;
+    private DigitalChannel touchSensor;
+    private Servo sweeper = null;
+    private boolean startPrev = false;
+    private boolean sweeperToggleState = false;
+
+
+
+    private Servo gripperServo = null;
+    private Servo flipWrist = null;
+
+    private boolean lastXButtonState = false;
+    private boolean lastYButtonState = false;
+
+    // Variables for control
+    private boolean isSlowMode = false;
+
+    private boolean isRightBumperPressed = false;
+    private boolean isLeftBumperPressed = false;
+
+    // Add these flags to keep track of the servo states
+    private boolean areContinuousServosRunning = false; // Indicates whether the servos are running
+    private boolean isRightServoActive = true; // True if continuousServo1 is active, false if continuousServo2 is active
+
+    //Boolean stopping wrist glitch with touch sensor
+    //private boolean
+
+    // Flags for intake servo
+    private boolean isIntakeServoDown = false;
+
+    private boolean isIntakeFirstPress = true;
+    private int slowModeDelay = 20;
+    // Linear motor position
+
+
+    @Override
+    public void init() {
+        // Initialize drive motors
+
+        frontLeft = hardwareMap.get(DcMotor.class, "leftFront");
+        backLeft = hardwareMap.get(DcMotor.class, "leftBack");
+        frontRight = hardwareMap.get(DcMotor.class, "rightFront");
+        backRight = hardwareMap.get(DcMotor.class, "rightBack");
+
+        // Reverse right motors
+        frontRight.setDirection(DcMotorSimple.Direction.REVERSE);
+        backRight.setDirection(DcMotorSimple.Direction.REVERSE);
+
+        // Initialize intake motors
+        intakeServo1 = hardwareMap.get(Servo.class, "left_Slide");
+        intakeServo2 = hardwareMap.get(Servo.class, "right_Slide");
+        wristServo = hardwareMap.get(Servo.class, "wrist_intake");
+        continuousServo1 = hardwareMap.get(Servo.class, "intake_Right");
+        continuousServo2 = hardwareMap.get(Servo.class, "intake_Left");
+        // intake sensors
+        touchSensor = hardwareMap.get(DigitalChannel.class, "touchSensor");
+        touchSensor.setMode(DigitalChannel.Mode.INPUT);
+
+        //sweeper
+        sweeper = hardwareMap.get(Servo.class, "sweeper");
+
+
+        gripperServo = hardwareMap.get(Servo.class, "claw");
+        flipWrist = hardwareMap.get(Servo.class, "wrist");
+        //Initialize intake to start position
+        wristServo.setPosition(1);
+        intakeServo1.setPosition(1);  // Open intake
+        intakeServo2.setPosition(0);
+        // Initialize linear motor
+        // Initialize linear motors
+        linearMotor = hardwareMap.get(DcMotor.class, "arm");
+        linearMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+
+// Initialize second linear motor (linearMotor2) and reverse it
+
+
+    }
+
+    @Override
+    public void start() {
+        runtime.reset();
+    }
+
+    @Override
+    public void loop() {
+
+        // intake sensors
+        boolean isPressed = !touchSensor.getState();
+
+        if (isPressed && isIntakeFirstPress&&isIntakeServoDown) {
+            wristServo.setPosition(1);
+            intakeServo1.setPosition(1);  // Open intake
+            intakeServo2.setPosition(0);
+            isIntakeServoDown = false;
+            isIntakeFirstPress = false;
+        }
+        if(!isPressed)
+        {
+            isIntakeFirstPress = true;
+        }
+
+        // Intake servos - controlled by the right trigger/left trigger
+        if (gamepad2.right_trigger > 0.5) {
+            intakeServo1.setPosition(1);  // Open intake
+            intakeServo2.setPosition(0);  // Open intake
+        } else if (gamepad2.left_trigger > 0.5) {
+            intakeServo1.setPosition(0);  // Close intake
+            intakeServo2.setPosition(1);  // Close intake
+        }
+        if (gamepad1.right_trigger > 0.5) {
+            intakeServo1.setPosition(1);  // Open intake
+            intakeServo2.setPosition(0);  // Open intake
+        } else if (gamepad1.left_trigger > 0.5) {
+            intakeServo1.setPosition(0);  // Close intake
+            intakeServo2.setPosition(1);  // Close intake
+        }
+        // Check for slow mode toggle
+        if (gamepad1.y && !isSlowMode&& slowModeDelay <= 0) {
+            isSlowMode = true; // Enable slow mode
+            //debounceDelay();
+            slowModeDelay = 20;
+        } else if (gamepad1.y && isSlowMode&& slowModeDelay <= 0) {
+            isSlowMode = false; // Disable slow mode
+            //debounceDelay();
+            slowModeDelay = 20;
+        }
+        slowModeDelay --;
+
+        // Mecanum drive controls
+        double y = -gamepad1.left_stick_y;
+        double x = gamepad1.left_stick_x;
+        double turn = -gamepad1.right_stick_x;
+
+// Apply non-linear scaling for joystick input (quadratic scaling for smoother low-speed control)
+        y = Math.signum(y) * Math.pow(y, 2);  // Square the value for non-linear sensitivity (you could adjust the exponent for different curves)
+        x = Math.signum(x) * Math.pow(x, 2);  // Same here for x-axis
+        turn = Math.signum(turn) * Math.pow(turn, 2);  // And for turn
+
+// Denominator calculation for normalizing speed and to prevent division by zero
+        double denominator = Math.max(Math.abs(y) + Math.abs(x) + Math.abs(turn), 0.2);
+
+// Define speed factor based on whether the robot is in slow mode
+        double speedFactor = isSlowMode ? 0.55 : 0.82; // Adjust speed based on mode
+        double turnSpeedFactor = isSlowMode ? 0.4 : 0.86; // Slow down turning in slow mode (adjust as necessary)
+
+// Calculate power for each wheel with non-linear joystick control
+        double frontLeftPower = ((y + x + turn) / denominator) * speedFactor;
+        double backLeftPower = ((y - x + turn) / denominator) * speedFactor;
+        double frontRightPower = ((y - x - turn) / denominator) * speedFactor;
+        double backRightPower = ((y + x - turn) / denominator) * speedFactor;
+
+// Apply turning adjustment based on turnSpeedFactor
+        frontLeftPower *= turnSpeedFactor;
+        backLeftPower *= turnSpeedFactor;
+        frontRightPower *= turnSpeedFactor;
+        backRightPower *= turnSpeedFactor;
+
+// Set power to wheels
+        frontLeft.setPower(frontLeftPower);
+        backLeft.setPower(backLeftPower);
+        frontRight.setPower(frontRightPower);
+        backRight.setPower(backRightPower);
+
+
+
+        if (gamepad2.dpad_down) {
+            linearMotor.setTargetPosition(linearMotor.getCurrentPosition()- 100);
+            linearMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            linearMotor.setPower(1.0);
+        } else if (gamepad2.dpad_up) {
+            linearMotor.setTargetPosition(linearMotor.getCurrentPosition() + 100);
+            linearMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            linearMotor.setPower(1.0);
+        } else if (gamepad2.dpad_right) {
+            linearMotor.setTargetPosition(635);
+            linearMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            linearMotor.setPower(1.0);
+
+            // Check if the linear motor has reached the target position
+            // if (linearMotor.getCurrentPosition() >= 630) {
+            flipWrist.setPosition(0.7);  // Move wrist to position 0.7
+            //     }
+        } else if (gamepad2.dpad_left) {
+            linearMotor.setTargetPosition(3100);
+            linearMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            linearMotor.setPower(1.0);
+            //   if (linearMotor.getCurrentPosition() <= 2800                                                                                       ) {
+            flipWrist.setPosition(0);  // Move wrist to position 0.7
+            // }
+        }  // Control linear motor using D-pad
+        // Debugging telemetry for arm motor control
+        if (gamepad2.dpad_up) {
+            linearMotor.setTargetPosition(linearMotor.getCurrentPosition() + 100);
+            linearMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            linearMotor.setPower(1.0);
+        } else if (gamepad2.dpad_down) {
+            linearMotor.setTargetPosition(linearMotor.getCurrentPosition() - 100);
+            linearMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            linearMotor.setPower(1.0);
+        }
+
+
+
+
+        if (gamepad2.y && !lastYButtonState) {
+            isIntakeServoDown = !isIntakeServoDown;
+            wristServo.setPosition(isIntakeServoDown ? 0.15 : .85);
+        }
+        lastYButtonState = gamepad2.y;
+
+
+
+        if (gamepad2.right_bumper && !isRightBumperPressed) {
+            if (!areContinuousServosRunning) {
+                // Start the servos if they are not running
+                continuousServo1.setPosition(1.0);
+                continuousServo2.setPosition(0.0);
+                areContinuousServosRunning = true;
+                isRightServoActive = true; // Right servo is active
+            } else {
+                // Stop the servos if they are running
+                continuousServo1.setPosition(0.5); // Set to a neutral position to stop movement
+                continuousServo2.setPosition(0.5); // Set to a neutral position to stop movement
+                areContinuousServosRunning = false;
+            }
+            isRightBumperPressed = true; // Set the flag to true to prevent repeated activation
+        } else if (!gamepad2.right_bumper) {
+            isRightBumperPressed = false; // Reset the flag when the button is released
+        }
+
+        // Toggle the continuous servos with the left bumper
+        if (gamepad2.left_bumper && !isLeftBumperPressed) {
+            if (!areContinuousServosRunning) {
+                // Start the servos if they are not running
+                continuousServo1.setPosition(0.0);
+                continuousServo2.setPosition(1.0);
+                areContinuousServosRunning = true;
+                isRightServoActive = false; // Left servo is active
+            } else {
+                // Stop the servos if they are running
+                continuousServo1.setPosition(0.5); // Set to a neutral position to stop movement
+                continuousServo2.setPosition(0.5); // Set to a neutral position to stop movement
+                areContinuousServosRunning = false;
+            }
+            isLeftBumperPressed = true; // Set the flag to true to prevent repeated activation
+        } else if (!gamepad2.left_bumper) {
+            isLeftBumperPressed = false; // Reset the flag when the button is released
+        }
+
+
+
+        // Toggle servo open/close with X button
+        if (gamepad2.x && !lastXButtonState) {
+            isServoOpen = !isServoOpen;
+            gripperServo.setPosition(isServoOpen ? 0.45 : 0.0);
+        }
+        if (gamepad1.x ) {
+            intakeServo1.setPosition(1);  // Open intake
+            intakeServo2.setPosition(0);
+        }
+        lastXButtonState = gamepad2.x;
+        // Toggle wrist with A buttonz
+        if (gamepad2.a && !lastAButtonState) {
+            isWristUsed = !isWristUsed;
+            flipWrist.setPosition(isWristUsed ? 0.7 : 0.0);
+        }
+        lastAButtonState = gamepad2.a;
+
+
+
+        if (gamepad1.start && !startPrev) { // Button pressed
+            sweeperToggleState = !sweeperToggleState; // Toggle state
+            sweeper.setPosition(sweeperToggleState ? 0 : 1);
+        }
+        startPrev = gamepad1.start; // Update previous state
+
+
+
+
+        // Telemetry data
+
+        telemetry.addData("Linear Motor Position", linearMotor.getCurrentPosition());
+        telemetry.addData("Gripper Servo Position", gripperServo.getPosition());
+        telemetry.addData("Flip Wrist Position", flipWrist.getPosition());
+        telemetry.addData("Front Left Ticks", frontLeft.getCurrentPosition());
+        telemetry.addData("Back Left Ticks", backLeft.getCurrentPosition());
+        telemetry.addData("Front Right Ticks", frontRight.getCurrentPosition());
+        telemetry.addData("Back Right Ticks", backRight.getCurrentPosition());
+        telemetry.addData("Linear Motor Position", linearMotor.getCurrentPosition());
+        telemetry.addData("Status", "Run Time: " + runtime.toString());
+        telemetry.addData("Left", "front (%.2f), back (%.2f)", frontLeftPower, backLeftPower);
+        telemetry.addData("Right", "front (%.2f), back (%.2f)", frontRightPower, backRightPower);
+        telemetry.addData("Intake Servo", "Position1 (%.2f), Position2 (%.2f)", intakeServo1.getPosition(), intakeServo2.getPosition());
+        telemetry.addData("Wrist Servo", "Position (%.2f)", wristServo.getPosition());
+
+        telemetry.addData("Continuous Servos", "Position1 (%.2f), Position2 (%.2f)", continuousServo1.getPosition(), continuousServo2.getPosition());
+        telemetry.update();
+
+        telemetry.addData("Slow Mode", isSlowMode ? "ON" : "OFF");
+
+
+        telemetry.update();
+    }
+
+    // Debounce delay to avoid multiple presses
+    private void debounceDelay() {
+        try {
+            sleep(100); // Debounce delay
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+}
