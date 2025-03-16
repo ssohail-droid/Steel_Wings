@@ -1,0 +1,79 @@
+package org.firstinspires.ftc.teamcode;
+
+import android.os.Environment;
+import java.io.*;
+
+public class FileManager {
+    private static final String FILE_NAME = "config.csv"; // File name for CSV
+
+    // Get the precise file path for the config file
+    static File getFile() {
+        // Use app-specific directory for external storage (no permissions needed)
+        File directory = new File(Environment.getExternalStorageDirectory(), "MyRobotConfig/Configs");
+        if (!directory.exists()) {
+            directory.mkdirs();  // Create folders if they don't exist
+        }
+        return new File(directory, FILE_NAME);
+    }
+
+    // Save configuration to the microSD card
+    public static void saveConfig(int tickAmount, double motorPower, int pauseTime, int loopCount) {
+        try {
+            File file = getFile();
+            BufferedWriter writer = new BufferedWriter(new FileWriter(file));
+            // Writing configuration as CSV (comma-separated values)
+            writer.write(tickAmount + "," + motorPower + "," + pauseTime + "," + loopCount);
+            writer.newLine(); // New line after writing
+            writer.flush();   // Ensure data is written immediately
+            writer.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    // Load configuration from the microSD card
+    public static int[] loadConfig() {
+        int[] config = {50, (int) (0.5 * 100), 500, 4}; // Default values
+
+        try {
+            File file = getFile();
+            // Check if the file exists
+            if (!file.exists()) {
+                System.out.println("⚠️ ERROR: config.csv NOT FOUND! Using default values.");
+                return config;
+            } else {
+                System.out.println("✅ File found: " + file.getAbsolutePath()); // Debugging output
+            }
+
+            BufferedReader reader = new BufferedReader(new FileReader(file));
+            String line = reader.readLine();
+
+            // Check if the file is empty
+            if (line == null || line.trim().isEmpty()) {
+                System.out.println("⚠️ ERROR: config.csv is EMPTY! Using default values.");
+                reader.close();
+                return config;
+            }
+
+            // Parse CSV line
+            String[] parts = line.split(",");
+            if (parts.length != 4) {
+                System.out.println("⚠️ ERROR: Invalid format in config.csv! Using default values.");
+                reader.close();
+                return config;
+            }
+
+            config[0] = Integer.parseInt(parts[0]); // Tick amount
+            config[1] = (int) (Double.parseDouble(parts[1]) * 100); // Motor power
+            config[2] = Integer.parseInt(parts[2]); // Pause time
+            config[3] = Integer.parseInt(parts[3]); // Loop count
+
+            reader.close();
+        } catch (IOException | NumberFormatException e) {
+            System.out.println("⚠️ ERROR: Exception reading config.csv: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return config;
+    }
+}
