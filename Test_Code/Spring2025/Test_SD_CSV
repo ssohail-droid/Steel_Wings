@@ -1,0 +1,27 @@
+package org.firstinspires.ftc.teamcode;
+
+import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+
+@TeleOp(name = "Test_SD_CSV")
+public class TestSDCSV extends LinearOpMode {
+    @Override
+    public void runOpMode() {
+        telemetry.addData("Status", "Testing SD Card...");
+        telemetry.update();
+
+        // Load configuration from the SD card
+        int[] config = FileManager.loadConfig();
+
+        // Display the status of file loading and file path
+        telemetry.addData("File Exists?", FileManager.getFile().exists() ? "YES ✅" : "NO ❌");
+        telemetry.addData("File Path", FileManager.getFile().getAbsolutePath());
+        telemetry.addData("Ticks", config[0]);
+        telemetry.addData("Power", config[1] / 100.0);
+        telemetry.addData("Pause (ms)", config[2]);
+        telemetry.addData("Loops", config[3]);
+        telemetry.update();
+
+        waitForStart();
+    }
+}
