@@ -1,0 +1,11 @@
+package org.firstinspires.ftc.teamcode;
+
+public class MotorConfig {
+    // Load saved values from the microSD card
+    private static int[] config = FileManager.loadConfig();
+
+    public static int TICK_AMOUNT = config[0];
+    public static double MOTOR_POWER = config[1] / 100.0; // Convert back to double
+    public static int PAUSE_TIME = config[2];
+    public static int LOOP_COUNT = config[3];
+}
