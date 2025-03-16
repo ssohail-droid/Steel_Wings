@@ -1,0 +1,75 @@
+package org.firstinspires.ftc.teamcode;
+
+import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.hardware.DcMotor;
+
+@com.qualcomm.robotcore.eventloop.opmode.TeleOp(name = "MotorEncoderTestSDCard2")
+public class MotorEncoderTestSDCard extends LinearOpMode {
+
+    @Override
+    public void runOpMode() {
+        telemetry.addData("Status", "Loading Config from SD...");
+        telemetry.update();
+
+        // Force-load SD values on every OpMode start
+        int[] config = FileManager.loadConfig();
+        int TICK_AMOUNT = config[0];
+        double MOTOR_POWER = config[1] / 100.0;
+        int PAUSE_TIME = config[2];
+        int LOOP_COUNT = config[3];
+
+        telemetry.addData("Ticks", TICK_AMOUNT);
+        telemetry.addData("Power", MOTOR_POWER);
+        telemetry.addData("Pause (ms)", PAUSE_TIME);
+        telemetry.addData("Loops", LOOP_COUNT);
+        telemetry.update();
+
+        // Initialize motor
+        DcMotor motor = hardwareMap.get(DcMotor.class, "motor");
+
+        motor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        motor.setTargetPosition(0);
+        motor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+
+        waitForStart();
+
+        if (opModeIsActive()) {
+            for (int i = 0; i < LOOP_COUNT; i++) {
+                // Move clockwise
+                int targetPos = motor.getCurrentPosition() + TICK_AMOUNT;
+                motor.setTargetPosition(targetPos);
+                motor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+                motor.setPower(MOTOR_POWER);
+
+                while (motor.isBusy() && opModeIsActive()) {
+                    telemetry.addData("Cycle", i + 1);
+                    telemetry.addData("Moving", "Clockwise");
+                    telemetry.addData("Current Position", motor.getCurrentPosition());
+                    telemetry.update();
+                }
+
+                motor.setPower(0);
+                sleep(PAUSE_TIME);
+
+                // Move counterclockwise
+                targetPos = motor.getCurrentPosition() - TICK_AMOUNT;
+                motor.setTargetPosition(targetPos);
+                motor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+                motor.setPower(MOTOR_POWER);
+
+                while (motor.isBusy() && opModeIsActive()) {
+                    telemetry.addData("Cycle", i + 1);
+                    telemetry.addData("Moving", "Counterclockwise");
+                    telemetry.addData("Current Position", motor.getCurrentPosition());
+                    telemetry.update();
+                }
+
+                motor.setPower(0);
+                sleep(PAUSE_TIME);
+            }
+
+            motor.setPower(0);
+            motor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        }
+    }
+}
